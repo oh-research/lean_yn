@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Lean</title>
+<style>
+  :root { --navy:#1f3a5f; --tint:#eef3f9; --rule:#c9d5e3; }
+  body { margin:0; font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+         color:#1b2430; background:#fff; line-height:1.6; }
+  header { background:var(--navy); color:#fff; padding:2.5rem 1.25rem; }
+  main, header > div { max-width:40rem; margin:0 auto; }
+  main { padding:1.5rem 1.25rem 3rem; }
+  h1 { margin:0 0 .4rem; font-size:1.7rem; }
+  header p { margin:0; opacity:.85; }
+  h2 { font-size:1.1rem; color:var(--navy); border-bottom:1px solid var(--rule);
+       padding-bottom:.3rem; margin-top:2rem; }
+  a.btn { display:block; background:var(--tint); border:1px solid var(--navy); border-radius:6px;
+          padding:.9rem 1rem; margin:.7rem 0; color:var(--navy); text-decoration:none; font-weight:600; }
+  a.btn:hover, a.btn:focus { background:var(--navy); color:#fff; }
+  a.btn small { display:block; font-weight:400; opacity:.8; }
+  ol { padding-left:1.2rem; }
+  code { background:var(--tint); padding:.1rem .3rem; border-radius:3px; }
+  form { margin-top:2rem; }
+  label { display:block; font-weight:600; color:var(--navy); margin-bottom:.4rem; }
+  input, button { font:inherit; padding:.7rem .9rem; border-radius:6px; border:1px solid var(--navy); }
+  input { width:14rem; max-width:60%; }
+  button { background:var(--navy); color:#fff; cursor:pointer; }
+  #msg { min-height:1.6em; margin-top:.6rem; color:#a33; }
+</style>
+</head>
+<body>
+<header><div>
+  <h1>Lean으로 수학 증명 검증하기</h1>
+  <p>2026. 11. 24.(화)</p>
+</div></header>
+<main id="main">
+  <form id="gate">
+    <label for="pw">비밀번호</label>
+    <input id="pw" type="password" autocomplete="off" autofocus required>
+    <button>열기</button>
+    <p id="msg" role="alert"></p>
+  </form>
+</main>
+<script>
+const ITER = 600000;
+let key;
+async function load(name) {
+  const buf = new Uint8Array(await (await fetch(name, { cache: 'no-store' })).arrayBuffer());
+  return { salt: buf.subarray(0, 16), iv: buf.subarray(16, 28), ct: buf.subarray(28) };
+}
+const open = (f) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: f.iv }, key, f.ct);
+
+document.getElementById('gate').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('msg');
+  msg.textContent = '확인하는 중이다.';
+  try {
+    const f = await load('content.enc');
+    const base = await crypto.subtle.importKey('raw',
+      new TextEncoder().encode(document.getElementById('pw').value), 'PBKDF2', false, ['deriveKey']);
+    key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: f.salt, iterations: ITER, hash: 'SHA-256' },
+      base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    document.getElementById('main').innerHTML = new TextDecoder().decode(await open(f));
+  } catch (err) {
+    msg.textContent = '비밀번호가 맞지 않는다.';
+  }
+});
+
+document.getElementById('main').addEventListener('click', async (e) => {
+  const a = e.target.closest('a[data-enc]');
+  if (!a) return;
+  e.preventDefault();
+  const blob = new Blob([await open(await load(a.dataset.enc))], { type: a.dataset.type });
+  const link = Object.assign(document.createElement('a'),
+    { href: URL.createObjectURL(blob), download: a.dataset.name });
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+});
+</script>
+</body>
+</html>
