@@ -44,6 +44,8 @@
   </form>
 </main>
 <script>
+// crypto.subtle only exists on https, so move there before anything else
+if (location.protocol === 'http:' && location.hostname !== 'localhost') location.replace('https:' + location.href.slice(5));
 const ITER = 600000;
 let key;
 async function load(name) {
